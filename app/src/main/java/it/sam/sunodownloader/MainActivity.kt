@@ -178,7 +178,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnInvert).setOnClickListener { adapter.invertVisible() }
 
         btnLogin.setOnClickListener { loginLauncher.launch(Intent(this, LoginActivity::class.java)) }
-        btnCookies.setOnClickListener { cookieLauncher.launch(arrayOf("*/*")) }
+        btnCookies.setOnClickListener {
+            AlertDialog.Builder(this).setTitle("Importa sessione Suno")
+                .setItems(arrayOf(
+                    "Incolla dagli appunti (Cookie-Editor su Firefox)",
+                    "Da file (Esporta sessione del programma PC)",
+                )) { _, which ->
+                    if (which == 0) pasteCookies() else cookieLauncher.launch(arrayOf("*/*"))
+                }
+                .setNegativeButton("Annulla", null).show()
+        }
         btnLogout.setOnClickListener {
             AlertDialog.Builder(this).setTitle("Esci da Suno?")
                 .setMessage("Cancella la sessione salvata nell'app.")
@@ -372,17 +381,47 @@ class MainActivity : AppCompatActivity() {
                 val text = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } ?: ""
                 }
-                val n = SunoSession.importCookies(text)
-                if (n == 0) log("✖ Nessun cookie Suno riconosciuto nel file.")
-                else {
-                    log("🍪 Importati $n cookie")
-                    log(if (SunoSession.isLoggedIn()) "✔ Sessione Suno attiva: ora puoi usare 'Cerca brani' e scaricare."
-                    else "⚠ Cookie importati ma senza sessione valida: esportali di nuovo mentre sei loggato.")
-                }
+                reportImport(SunoSession.importCookies(text, replace = true), "file")
             } catch (e: Exception) {
                 log("✖ Importazione cookie fallita: ${e.message}")
             }
             refreshLogin()
+        }
+    }
+
+    /** Incolla l'esportazione JSON di Cookie-Editor; si puo' ripetere (suno.com, poi clerk.suno.com). */
+    private fun pasteCookies() {
+        val cm = getSystemService(ClipboardManager::class.java)
+        val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString() ?: ""
+        if (text.isBlank()) {
+            Toast.makeText(this, "Appunti vuoti: in Cookie-Editor premi Export → JSON", Toast.LENGTH_LONG).show()
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                reportImport(SunoSession.importCookies(text, replace = false), "appunti")
+            } catch (e: Exception) {
+                log("✖ Importazione cookie fallita: ${e.message}")
+            }
+            refreshLogin()
+        }
+    }
+
+    private fun reportImport(n: Int, from: String) {
+        if (n == 0) {
+            log("✖ Nessun cookie Suno riconosciuto ($from). In Cookie-Editor usa Export → JSON.")
+            return
+        }
+        log("🍪 Importati $n cookie ($from)")
+        val keys = SunoSession.keyCookies()
+        log("   " + keys.entries.joinToString("   ") { (k, v) -> "$k ${if (v) "✔" else "✖"}" })
+        when {
+            !SunoSession.isLoggedIn() ->
+                log("⚠ Sessione non valida: fai il login su suno.com nel browser ed esporta di nuovo.")
+            keys["__client"] != true ->
+                log("⚠ Manca __client: senza, la sessione scade in pochi minuti. In Firefox apri " +
+                    "https://clerk.suno.com , esporta con Cookie-Editor e incolla anche quello.")
+            else -> log("✔ Sessione Suno attiva: ora puoi usare 'Cerca brani' e scaricare.")
         }
     }
 }

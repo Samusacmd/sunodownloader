@@ -50,6 +50,16 @@ object SunoSession {
         null
     }
 
+    /** I cookie che servono a Clerk per restare connessi: nome -> presente. */
+    fun keyCookies(): Map<String, Boolean> {
+        val c = cookies()
+        return linkedMapOf(
+            "__client" to c.containsKey("__client"),
+            "__client_uat" to c.keys.any { it.startsWith("__client_uat") },
+            "__session" to c.keys.any { it.startsWith("__session") },
+        )
+    }
+
     fun logout() {
         val cm = CookieManager.getInstance()
         cm.removeAllCookies(null)
@@ -61,7 +71,9 @@ object SunoSession {
 
     /** Accetta: JSON {nome: valore} | JSON lista (Cookie-Editor / EditThisCookie) |
      *  cookies.txt Netscape | intestazione 'nome=valore; nome2=valore2'. Restituisce quanti cookie ha impostato. */
-    suspend fun importCookies(raw: String): Int {
+    /** replace = true cancella prima la vecchia sessione (file completo dal PC);
+     *  false aggiunge ai cookie esistenti (piu' incollate da Cookie-Editor: suno.com + clerk.suno.com). */
+    suspend fun importCookies(raw: String, replace: Boolean = true): Int {
         val text = raw.trim().trimStart('﻿')
         val now = System.currentTimeMillis() / 1000
         val year = 365L * 86400
@@ -123,7 +135,9 @@ object SunoSession {
 
         val cm = CookieManager.getInstance()
         // via la vecchia sessione (aspettando la fine: e' asincrono), per evitare conflitti
-        suspendCancellableCoroutine<Unit> { cont -> cm.removeAllCookies { if (cont.isActive) cont.resume(Unit) } }
+        if (replace) {
+            suspendCancellableCoroutine<Unit> { cont -> cm.removeAllCookies { if (cont.isActive) cont.resume(Unit) } }
+        }
         for (c in list) {
             val host = c.domain.trimStart('.')
             val attrs = StringBuilder("${c.name}=${c.value}; Path=${c.path}; Max-Age=${c.maxAge}")

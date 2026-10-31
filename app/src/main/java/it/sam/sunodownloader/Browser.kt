@@ -77,15 +77,17 @@ class Browser(val web: WebView) {
         }
 
         @SuppressLint("SetJavaScriptEnabled")
-        fun setup(web: WebView, worker: Boolean) {
+        fun setup(web: WebView, worker: Boolean, desktop: Boolean = true) {
             val s = web.settings
             s.javaScriptEnabled = true
             s.domStorageEnabled = true
             s.databaseEnabled = true
             s.mediaPlaybackRequiresUserGesture = false   // autoplay come --autoplay-policy
-            s.userAgentString = desktopUa(web.context)
-            s.useWideViewPort = true
-            s.loadWithOverviewMode = true
+            if (desktop) {
+                s.userAgentString = desktopUa(web.context)
+                s.useWideViewPort = true
+                s.loadWithOverviewMode = true
+            }
             s.builtInZoomControls = true
             s.displayZoomControls = false
             s.javaScriptCanOpenWindowsAutomatically = true

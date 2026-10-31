@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnLogin: Button
     private lateinit var btnCookies: Button
     private lateinit var btnLogout: Button
+    private lateinit var btnBrowse: Button
     private lateinit var fileLabel: TextView
     private lateinit var fileBar: LinearProgressIndicator
     private lateinit var totalLabel: TextView
@@ -76,6 +77,11 @@ class MainActivity : AppCompatActivity() {
         refreshLogin()
         log(if (SunoSession.isLoggedIn()) "✔ Login riuscito, sessione salvata."
         else "⚠ Login non rilevato: riprova e premi Fatto solo dopo essere entrato.")
+    }
+
+    private val browseLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        refreshLogin()
+        if (r.resultCode == RESULT_OK) handleBrowse(r.data)
     }
 
     private val cookieLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -144,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         btnLogin = findViewById(R.id.btnLogin)
         btnCookies = findViewById(R.id.btnCookies)
         btnLogout = findViewById(R.id.btnLogout)
+        btnBrowse = findViewById(R.id.btnBrowse)
         fileLabel = findViewById(R.id.fileLabel)
         fileBar = findViewById(R.id.fileBar)
         totalLabel = findViewById(R.id.totalLabel)
@@ -195,6 +202,7 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("Annulla", null).show()
         }
         btnScan.setOnClickListener { startScan() }
+        btnBrowse.setOnClickListener { browseLauncher.launch(Intent(this, BrowseActivity::class.java)) }
         btnDownload.setOnClickListener { startDownload() }
         btnPause.setOnClickListener {
             val c = ctl ?: return@setOnClickListener
@@ -279,6 +287,7 @@ class MainActivity : AppCompatActivity() {
         btnLogin.isEnabled = !running
         btnCookies.isEnabled = !running
         btnLogout.isEnabled = !running
+        btnBrowse.isEnabled = !running
         btnPause.isEnabled = running
         btnStop.isEnabled = running
         btnPause.text = "Pausa"
@@ -343,11 +352,39 @@ class MainActivity : AppCompatActivity() {
         } else go()
     }
 
-    private fun startDownload() {
+    /** Risultato del browser: un brano da scaricare subito, oppure i brani della pagina da scegliere. */
+    private fun handleBrowse(data: Intent?) {
+        if (data == null) return
+        when (data.getStringExtra(BrowseActivity.EXTRA_MODE)) {
+            BrowseActivity.MODE_SONG -> {
+                val link = data.getStringExtra(BrowseActivity.EXTRA_LINK) ?: return
+                log("🌐 Dal browser: $link")
+                startDownload(only = listOf(link))
+            }
+            BrowseActivity.MODE_LIST -> {
+                val arr = try { org.json.JSONArray(data.getStringExtra(BrowseActivity.EXTRA_SONGS) ?: "[]") }
+                catch (e: Exception) { org.json.JSONArray() }
+                val items = (0 until arr.length()).mapNotNull { i ->
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val id = o.optString("id")
+                    if (!Util.UUID_RE.matches(id)) null
+                    else Song(id.lowercase(), title = o.optString("title").ifEmpty { "(senza titolo)" },
+                        handle = o.optString("handle"), image = o.optString("image"), checked = true)
+                }
+                val owner = items.filter { it.handle.isNotEmpty() }.groupingBy { it.handle }.eachCount()
+                    .maxByOrNull { it.value }?.key
+                adapter.setItems(items, owner)
+                log("🌐 ${items.size} brani presi da ${data.getStringExtra(BrowseActivity.EXTRA_LINK)}: " +
+                    "togli la spunta a quelli che non vuoi e premi Scarica.")
+            }
+        }
+    }
+
+    private fun startDownload(only: List<String>? = null) {
         saveSettings()
         val manual = links.text.toString().lines().map { it.trim() }
             .filter { it.contains("suno.com/") || it.contains("suno.ai/") }
-        val all = (adapter.checked().map { it.link } + manual).distinct()
+        val all = only ?: (adapter.checked().map { it.link } + manual).distinct()
         if (all.isEmpty()) {
             Toast.makeText(this, "Nessun brano: cerca nel profilo e spunta, oppure incolla dei link", Toast.LENGTH_LONG).show()
             return

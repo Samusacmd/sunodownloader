@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:colorBackground"
+    android:orientation="vertical">
+
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <!-- Intestazione -->
+            <TextView
+                android:id="@+id/appTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Suno Downloader"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/loginStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Sessione: ..."
+                android:textColor="@color/muted" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnLogin"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Login Suno" />
+
+                <Button
+                    android:id="@+id/btnCookies"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:text="Importa cookie" />
+
+                <Button
+                    android:id="@+id/btnLogout"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="Esci" />
+            </LinearLayout>
+
+            <!-- Profilo -->
+            <TextView
+                style="@style/SectionTitle"
+                android:text="Profilo Suno" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/profileUrl"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="https://suno.com/me  oppure  @nome"
+                    android:importantForAutofill="no"
+                    android:inputType="textUri"
+                    android:singleLine="true" />
+
+                <Button
+                    android:id="@+id/btnScan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="Cerca brani" />
+            </LinearLayout>
+
+            <!-- Elenco brani -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/filter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Filtro titolo / artista"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:singleLine="true" />
+
+                <CheckBox
+                    android:id="@+id/onlyOwner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Solo autore" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/list"
+                android:layout_width="match_parent"
+                android:layout_height="320dp"
+                android:layout_marginTop="4dp"
+                android:background="@drawable/panel"
+                android:nestedScrollingEnabled="true"
+                android:padding="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnAll"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tutti" />
+
+                <Button
+                    android:id="@+id/btnNone"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nessuno" />
+
+                <Button
+                    android:id="@+id/btnInvert"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Inverti" />
+
+                <TextView
+                    android:id="@+id/count"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:text="0 / 0"
+                    android:textColor="@color/muted" />
+            </LinearLayout>
+
+            <!-- Link manuali -->
+            <TextView
+                style="@style/SectionTitle"
+                android:text="Link manuali (uno per riga)" />
+
+            <EditText
+                android:id="@+id/links"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:hint="https://suno.com/song/..."
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine|textUri"
+                android:minLines="2" />
+
+            <!-- Opzioni -->
+            <TextView
+                style="@style/SectionTitle"
+                android:text="Opzioni" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="MP3 kbps:" />
+
+                <Spinner
+                    android:id="@+id/bitrate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="90dp" />
+
+                <CheckBox
+                    android:id="@+id/artistFolder"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Cartella per artista" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/showBrowser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mostra browser (per controllare o premere Play)" />
+
+            <FrameLayout
+                android:id="@+id/browserBox"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@drawable/panel">
+
+                <WebView
+                    android:id="@+id/web"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+            </FrameLayout>
+
+            <!-- Comandi -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnDownload"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="⬇ Scarica" />
+
+                <Button
+                    android:id="@+id/btnPause"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:enabled="false"
+                    android:text="Pausa" />
+
+                <Button
+                    android:id="@+id/btnStop"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:enabled="false"
+                    android:text="Stop" />
+            </LinearLayout>
+
+            <!-- Avanzamento -->
+            <TextView
+                android:id="@+id/fileLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="File: -"
+                android:textColor="@color/muted" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/fileBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                app:trackCornerRadius="4dp" />
+
+            <TextView
+                android:id="@+id/totalLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Totale: -"
+                android:textColor="@color/muted" />
+
+            <com.google.android.material.progressindicator.LinearProgressIndicator
+                android:id="@+id/totalBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="100"
+                app:indicatorColor="@color/accent2"
+                app:trackCornerRadius="4dp" />
+
+            <!-- Log -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/SectionTitle"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Log" />
+
+                <Button
+                    android:id="@+id/btnCopyLog"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Copia" />
+
+                <Button
+                    android:id="@+id/btnClearLog"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Svuota" />
+            </LinearLayout>
+
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/logScroll"
+                android:layout_width="match_parent"
+                android:layout_height="260dp"
+                android:background="@drawable/panel"
+                android:nestedScrollingEnabled="true"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/log"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+            </androidx.core.widget.NestedScrollView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

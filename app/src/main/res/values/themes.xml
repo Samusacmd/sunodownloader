@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Suno" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#4B3D99</item>
+        <item name="colorOnPrimaryContainer">#FFFFFF</item>
+        <item name="colorSecondary">@color/accent2</item>
+        <item name="colorSecondaryContainer">#3A3060</item>
+        <item name="colorOnSecondaryContainer">#FFFFFF</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorSurface">@color/panel</item>
+        <item name="colorOnSurface">@color/fg</item>
+        <item name="android:textColorPrimary">@color/fg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+
+    <style name="SectionTitle">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">14dp</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+</resources>

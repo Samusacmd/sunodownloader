@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCookies: Button
     private lateinit var btnLogout: Button
     private lateinit var btnBrowse: Button
+    private lateinit var btnMenu: Button
     private lateinit var fileLabel: TextView
     private lateinit var fileBar: LinearProgressIndicator
     private lateinit var totalLabel: TextView
@@ -133,6 +134,11 @@ class MainActivity : AppCompatActivity() {
         handleShare(intent)
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        fitAuthRow()   // in orizzontale i tasti possono tornare in riga
+    }
+
     override fun onResume() {
         super.onResume()
         refreshLogin()
@@ -167,6 +173,7 @@ class MainActivity : AppCompatActivity() {
         btnCookies = findViewById(R.id.btnCookies)
         btnLogout = findViewById(R.id.btnLogout)
         btnBrowse = findViewById(R.id.btnBrowse)
+        btnMenu = findViewById(R.id.btnMenu)
         fileLabel = findViewById(R.id.fileLabel)
         fileBar = findViewById(R.id.fileBar)
         totalLabel = findViewById(R.id.totalLabel)
@@ -205,23 +212,23 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnNone).setOnClickListener { adapter.setAllVisible(false) }
         findViewById<Button>(R.id.btnInvert).setOnClickListener { adapter.invertVisible() }
 
-        btnLogin.setOnClickListener { loginLauncher.launch(Intent(this, LoginActivity::class.java)) }
-        btnCookies.setOnClickListener {
-            AlertDialog.Builder(this).setTitle("Importa sessione Suno")
-                .setItems(arrayOf(
-                    "Incolla dagli appunti (Cookie-Editor su Firefox)",
-                    "Da file (Esporta sessione del programma PC)",
-                )) { _, which ->
-                    if (which == 0) pasteCookies() else cookieLauncher.launch(arrayOf("*/*"))
-                }
-                .setNegativeButton("Annulla", null).show()
+        btnLogin.setOnClickListener { doLogin() }
+        btnCookies.setOnClickListener { doImport() }
+        btnLogout.setOnClickListener { doLogout() }
+        btnMenu.setOnClickListener { v ->
+            val m = android.widget.PopupMenu(this, v)
+            m.menu.add(0, 1, 0, "Login Suno")
+            m.menu.add(0, 2, 1, "Importa cookie")
+            m.menu.add(0, 3, 2, "Esci")
+            val idle = ctl == null
+            for (k in 0 until m.menu.size()) m.menu.getItem(k).isEnabled = idle
+            m.setOnMenuItemClickListener { item ->
+                when (item.itemId) { 1 -> doLogin(); 2 -> doImport(); 3 -> doLogout() }
+                true
+            }
+            m.show()
         }
-        btnLogout.setOnClickListener {
-            AlertDialog.Builder(this).setTitle("Esci da Suno?")
-                .setMessage("Cancella la sessione salvata nell'app.")
-                .setPositiveButton("Esci") { _, _ -> SunoSession.logout(); refreshLogin(); log("Sessione cancellata.") }
-                .setNegativeButton("Annulla", null).show()
-        }
+        fitAuthRow()
         btnScan.setOnClickListener { startScan() }
         btnBrowse.setOnClickListener { browseLauncher.launch(Intent(this, BrowseActivity::class.java)) }
         btnDownload.setOnClickListener { startDownload() }
@@ -239,6 +246,46 @@ class MainActivity : AppCompatActivity() {
             val cm = getSystemService(ClipboardManager::class.java)
             cm.setPrimaryClip(ClipData.newPlainText("Log Suno Downloader", logBuf.toString()))
             Toast.makeText(this, "Log copiato", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun doLogin() { loginLauncher.launch(Intent(this, LoginActivity::class.java)) }
+
+    private fun doImport() {
+            AlertDialog.Builder(this).setTitle("Importa sessione Suno")
+                .setItems(arrayOf(
+                    "Incolla dagli appunti (Cookie-Editor su Firefox)",
+                    "Da file (Esporta sessione del programma PC)",
+                )) { _, which ->
+                    if (which == 0) pasteCookies() else cookieLauncher.launch(arrayOf("*/*"))
+                }
+                .setNegativeButton("Annulla", null).show()
+    }
+
+    private fun doLogout() {
+            AlertDialog.Builder(this).setTitle("Esci da Suno?")
+                .setMessage("Cancella la sessione salvata nell'app.")
+                .setPositiveButton("Esci") { _, _ -> SunoSession.logout(); refreshLogin(); log("Sessione cancellata.") }
+                .setNegativeButton("Annulla", null).show()
+    }
+
+    /** Se Login / Importa cookie / Esci non stanno in una riga, li sposta nel menu ⋮ in alto a destra. */
+    private fun fitAuthRow() {
+        val row = findViewById<android.widget.LinearLayout>(R.id.authRow)
+        row.post {
+            val spec = android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+            var need = 0
+            for (k in 0 until row.childCount) {
+                val c = row.getChildAt(k)
+                c.measure(spec, spec)
+                val lp = c.layoutParams as android.view.ViewGroup.MarginLayoutParams
+                need += c.measuredWidth + lp.marginStart + lp.marginEnd
+            }
+            val parent = row.parent as android.view.View   // misura sul contenitore: funziona anche se la riga e' nascosta
+            val avail = parent.width - parent.paddingLeft - parent.paddingRight
+            val fits = need <= avail
+            row.visibility = if (fits) android.view.View.VISIBLE else android.view.View.GONE
+            btnMenu.visibility = if (fits) android.view.View.GONE else android.view.View.VISIBLE
         }
     }
 

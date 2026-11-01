@@ -23,15 +23,34 @@
             android:orientation="vertical"
             android:padding="14dp">
 
-            <!-- Intestazione -->
-            <TextView
-                android:id="@+id/appTitle"
+            <!-- Intestazione: titolo + menu ⋮ (compare solo se i tasti non ci stanno) -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Suno Downloader"
-                android:textColor="?attr/colorPrimary"
-                android:textSize="22sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/appTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Suno Downloader"
+                    android:textColor="?attr/colorPrimary"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnMenu"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:minWidth="0dp"
+                    android:padding="0dp"
+                    android:text="⋮"
+                    android:textSize="24sp"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/loginStatus"
@@ -42,6 +61,7 @@
                 android:textColor="@color/muted" />
 
             <LinearLayout
+                android:id="@+id/authRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -51,14 +71,26 @@
                     android:id="@+id/btnLogin"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:textSize="13sp"
                     android:text="Login Suno" />
 
                 <Button
                     android:id="@+id/btnCookies"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:textSize="13sp"
                     android:layout_marginStart="6dp"
                     android:text="Importa cookie" />
 
@@ -66,7 +98,13 @@
                     android:id="@+id/btnLogout"
                     style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="12dp"
+                    android:textSize="13sp"
                     android:layout_marginStart="6dp"
                     android:text="Esci" />
             </LinearLayout>

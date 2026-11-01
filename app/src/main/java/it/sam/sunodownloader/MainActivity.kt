@@ -51,7 +51,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var count: TextView
     private lateinit var bitrate: Spinner
     private lateinit var artistFolder: CheckBox
-    private lateinit var showBrowser: CheckBox
+    private lateinit var saveDir: TextView
+    private var browserShown = false
     private lateinit var browserBox: FrameLayout
     private lateinit var btnScan: Button
     private lateinit var btnDownload: Button
@@ -84,6 +85,20 @@ class MainActivity : AppCompatActivity() {
         if (r.resultCode == RESULT_OK) handleBrowse(r.data)
     }
 
+    private val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                prefs.edit().putString("save_tree", uri.toString()).apply()
+                updateSaveDir()
+                log("📁 Salvataggio in ${Saver.label(uri)}")
+            } catch (e: Exception) {
+                log("✖ Cartella non utilizzabile: ${e.message}")
+            }
+        }
+    }
+
     private val cookieLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importCookies(uri)
     }
@@ -110,6 +125,7 @@ class MainActivity : AppCompatActivity() {
         if (!Browser.hookSupported()) log("⚠ WebView vecchia: aggiorna \"Android System WebView\" dal Play Store per una cattura affidabile.")
         refreshLogin()
         handleShare(intent)
+        findViewById<NestedScrollView>(R.id.scroll).post { findViewById<NestedScrollView>(R.id.scroll).scrollTo(0, 0) }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -141,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         count = findViewById(R.id.count)
         bitrate = findViewById(R.id.bitrate)
         artistFolder = findViewById(R.id.artistFolder)
-        showBrowser = findViewById(R.id.showBrowser)
+        saveDir = findViewById(R.id.saveDir)
         browserBox = findViewById(R.id.browserBox)
         btnScan = findViewById(R.id.btnScan)
         btnDownload = findViewById(R.id.btnDownload)
@@ -170,9 +186,14 @@ class MainActivity : AppCompatActivity() {
         profileUrl.setText(prefs.getString("profile_url", "https://suno.com/me"))
         links.setText(prefs.getString("links", ""))
         artistFolder.isChecked = prefs.getBoolean("artist_folder", false)
-        showBrowser.isChecked = prefs.getBoolean("show_browser", false)
-        setBrowserVisible(showBrowser.isChecked)
-        showBrowser.setOnCheckedChangeListener { _, c -> setBrowserVisible(c) }
+        setBrowserVisible(false)
+        updateSaveDir()
+        findViewById<Button>(R.id.btnSaveDir).setOnClickListener { folderLauncher.launch(null) }
+        findViewById<Button>(R.id.btnSaveDirReset).setOnClickListener {
+            prefs.edit().remove("save_tree").apply()
+            updateSaveDir()
+            log("📁 Salvataggio in ${Saver.DEFAULT_LABEL}")
+        }
 
         findViewById<EditText>(R.id.filter).addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -224,7 +245,19 @@ class MainActivity : AppCompatActivity() {
     private fun setBrowserVisible(v: Boolean) {
         val h = if (v) (380 * resources.displayMetrics.density).toInt() else 1
         browserBox.layoutParams = browserBox.layoutParams.apply { height = h }
-        if (showBrowser.isChecked != v) showBrowser.isChecked = v
+        browserShown = v
+    }
+
+    /** Cartella scelta, solo se il permesso e' ancora valido (altrimenti Music/Suno). */
+    private fun saveTreeUri(): Uri? {
+        val s = prefs.getString("save_tree", null) ?: return null
+        val uri = Uri.parse(s)
+        val ok = contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+        return if (ok) uri else null
+    }
+
+    private fun updateSaveDir() {
+        saveDir.text = "Salva in: " + Saver.label(saveTreeUri())
     }
 
     private fun refreshLogin() {
@@ -244,7 +277,6 @@ class MainActivity : AppCompatActivity() {
             .putString("links", links.text.toString())
             .putInt("bitrate", Mp3Converter.BITRATES[bitrate.selectedItemPosition.coerceAtLeast(0)])
             .putBoolean("artist_folder", artistFolder.isChecked)
-            .putBoolean("show_browser", showBrowser.isChecked)
             .apply()
     }
 
@@ -277,7 +309,7 @@ class MainActivity : AppCompatActivity() {
             if (cut > 0) { logBuf.delete(0, cut + 1); logLines = logBuf.count { it == '\n' } }
         }
         logView.text = logBuf
-        logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
+        logScroll.post { logScroll.scrollTo(0, logView.height) }
     }
 
     // ------------------------------------------------------------------ lavori
@@ -393,13 +425,16 @@ class MainActivity : AppCompatActivity() {
         val hints = adapter.allItems().associateBy { it.id }
         val folder = artistFolder.isChecked
         startJob { c ->
-            log("⬇ Download di ${all.size} brani — MP3 $rate kbps in Music/Suno")
+            val tree = saveTreeUri()
+            log("⬇ Download di ${all.size} brani — MP3 $rate kbps in ${Saver.label(tree)}")
             val d = Downloader(this, browser, ::log, c,
                 fprog = { pct, phase -> runOnUiThread { fileBar.setProgressCompat(pct, true); fileLabel.text = "File: $phase ($pct%)" } },
                 tprog = { done, total -> runOnUiThread { updateTotal(done, total) } },
-                showBrowser = { v -> runOnUiThread { setBrowserVisible(v) } })
-            val (ok, n) = d.run(all, rate, folder, hints, showBrowser.isChecked)
-            log((if (ok == n) "✔" else "⚠") + " Fine: $ok/$n scaricati in Music/Suno")
+                showBrowser = { v -> runOnUiThread { setBrowserVisible(v) } },
+                saveTree = tree)
+            val (ok, n) = d.run(all, rate, folder, hints, false)
+            log((if (ok == n) "✔" else "⚠") + " Fine: $ok/$n scaricati in ${Saver.label(tree)}")
+            setBrowserVisible(false)
             fileLabel.text = "File: -"
         }
     }

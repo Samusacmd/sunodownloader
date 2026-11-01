@@ -17,6 +17,7 @@ class Downloader(
     private val fprog: (Int, String) -> Unit,          // avanzamento file (0-100, fase)
     private val tprog: (Int, Int) -> Unit,             // avanzamento totale (fatti, totale)
     private val showBrowser: (Boolean) -> Unit,
+    private val saveTree: android.net.Uri? = null,      // cartella scelta (null = Music/Suno)
 ) {
     private fun JSONObject.s(k: String): String = if (isNull(k)) "" else optString(k)
 
@@ -144,7 +145,7 @@ class Downloader(
             fprog(97, "Scrittura titolo e cover")
             val tag = Id3.build(title, artist, cover)
             val sizeMb = (mp3.length() - skip + tag.size) / 1024.0 / 1024.0
-            val path = withContext(Dispatchers.IO) { Saver.saveMp3(ctx, base, sub, title, artist, tag, mp3, skip) }
+            val path = withContext(Dispatchers.IO) { Saver.save(ctx, saveTree, base, sub, title, artist, tag, mp3, skip) }
             log("   ✔ Salvato: $path  (${"%.2f".format(sizeMb)} MB)")
         } finally {
             mp3.delete()

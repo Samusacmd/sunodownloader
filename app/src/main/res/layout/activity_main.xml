@@ -17,6 +17,9 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:descendantFocusability="beforeDescendants"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
             android:orientation="vertical"
             android:padding="14dp">
 
@@ -46,18 +49,17 @@
 
                 <Button
                     android:id="@+id/btnLogin"
-                    android:layout_width="0dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
                     android:text="Login Suno" />
 
                 <Button
                     android:id="@+id/btnCookies"
-                    style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="0dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
-                    android:layout_weight="1"
                     android:text="Importa cookie" />
 
                 <Button
@@ -189,7 +191,10 @@
                 android:hint="https://suno.com/song/..."
                 android:importantForAutofill="no"
                 android:inputType="textMultiLine|textUri"
-                android:minLines="2" />
+                android:maxLines="3"
+                android:minLines="1"
+                android:scrollbars="vertical"
+                android:textSize="13sp" />
 
             <!-- Opzioni -->
             <TextView
@@ -221,11 +226,35 @@
                     android:text="Cartella per artista" />
             </LinearLayout>
 
-            <CheckBox
-                android:id="@+id/showBrowser"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Mostra browser (per controllare o premere Play)" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/saveDir"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="middle"
+                    android:singleLine="true"
+                    android:text="Salva in: Music/Suno" />
+
+                <Button
+                    android:id="@+id/btnSaveDir"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Cambia" />
+
+                <Button
+                    android:id="@+id/btnSaveDirReset"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Predefinita" />
+            </LinearLayout>
 
             <FrameLayout
                 android:id="@+id/browserBox"

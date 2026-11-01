@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var links: EditText
     private lateinit var count: TextView
     private lateinit var bitrate: Spinner
+    private lateinit var format: Spinner
     private lateinit var artistFolder: CheckBox
     private lateinit var saveDir: TextView
     private var browserShown = false
@@ -162,6 +163,7 @@ class MainActivity : AppCompatActivity() {
         links = findViewById(R.id.links)
         count = findViewById(R.id.count)
         bitrate = findViewById(R.id.bitrate)
+        format = findViewById(R.id.format)
         artistFolder = findViewById(R.id.artistFolder)
         saveDir = findViewById(R.id.saveDir)
         browserBox = findViewById(R.id.browserBox)
@@ -190,6 +192,17 @@ class MainActivity : AppCompatActivity() {
             Mp3Converter.BITRATES.map { it.toString() })
         val savedRate = prefs.getInt("bitrate", 256)
         bitrate.setSelection(Mp3Converter.BITRATES.indexOf(savedRate).coerceAtLeast(0))
+        format.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, Mp3Converter.FORMATS)
+        format.setSelection(Mp3Converter.FORMATS.indexOf(prefs.getString("format", "MP3")).coerceAtLeast(0))
+        format.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                val mp3 = Mp3Converter.FORMATS[pos] == "MP3"
+                bitrate.isEnabled = mp3     // il bitrate vale solo per l'MP3
+                bitrate.alpha = if (mp3) 1f else 0.4f
+                findViewById<TextView>(R.id.bitrateLabel).alpha = if (mp3) 1f else 0.4f
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
         profileUrl.setText(prefs.getString("profile_url", "https://suno.com/me"))
         links.setText(prefs.getString("links", ""))
         artistFolder.isChecked = prefs.getBoolean("artist_folder", false)
@@ -296,6 +309,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Cartella scelta, solo se il permesso e' ancora valido (altrimenti Music/Suno). */
+    private fun selectedFormat(): String = Mp3Converter.FORMATS[format.selectedItemPosition.coerceAtLeast(0)]
+
     private fun saveTreeUri(): Uri? {
         val s = prefs.getString("save_tree", null) ?: return null
         val uri = Uri.parse(s)
@@ -324,6 +339,7 @@ class MainActivity : AppCompatActivity() {
             .putString("links", links.text.toString())
             .putInt("bitrate", Mp3Converter.BITRATES[bitrate.selectedItemPosition.coerceAtLeast(0)])
             .putBoolean("artist_folder", artistFolder.isChecked)
+            .putString("format", selectedFormat())
             .apply()
     }
 
@@ -473,12 +489,14 @@ class MainActivity : AppCompatActivity() {
         val folder = artistFolder.isChecked
         startJob { c ->
             val tree = saveTreeUri()
-            log("⬇ Download di ${all.size} brani — MP3 $rate kbps in ${Saver.label(tree)}")
+            val fmt = selectedFormat()
+            log("⬇ Download di ${all.size} brani — " + (if (fmt == "MP3") "MP3 $rate kbps" else "WAV") +
+                " in ${Saver.label(tree)}")
             val d = Downloader(this, browser, ::log, c,
                 fprog = { pct, phase -> runOnUiThread { fileBar.setProgressCompat(pct, true); fileLabel.text = "File: $phase ($pct%)" } },
                 tprog = { done, total -> runOnUiThread { updateTotal(done, total) } },
                 showBrowser = { v -> runOnUiThread { setBrowserVisible(v) } },
-                saveTree = tree)
+                saveTree = tree, format = fmt)
             val (ok, n) = d.run(all, rate, folder, hints, false)
             log((if (ok == n) "✔" else "⚠") + " Fine: $ok/$n scaricati in ${Saver.label(tree)}")
             setBrowserVisible(false)

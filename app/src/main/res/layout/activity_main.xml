@@ -248,21 +248,33 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="MP3 kbps:" />
+                    android:text="Formato:" />
+
+                <Spinner
+                    android:id="@+id/format"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="90dp" />
+
+                <TextView
+                    android:id="@+id/bitrateLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="kbps:" />
 
                 <Spinner
                     android:id="@+id/bitrate"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:minWidth="90dp" />
-
-                <CheckBox
-                    android:id="@+id/artistFolder"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Cartella per artista" />
             </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/artistFolder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Cartella per artista" />
 
             <LinearLayout
                 android:layout_width="match_parent"

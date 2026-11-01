@@ -18,6 +18,7 @@ class Downloader(
     private val tprog: (Int, Int) -> Unit,             // avanzamento totale (fatti, totale)
     private val showBrowser: (Boolean) -> Unit,
     private val saveTree: android.net.Uri? = null,      // cartella scelta (null = Music/Suno)
+    private val format: String = "MP3",                 // "MP3" oppure "WAV"
 ) {
     private fun JSONObject.s(k: String): String = if (isNull(k)) "" else optString(k)
 
@@ -119,6 +120,11 @@ class Downloader(
 
         val base = Util.sanitize(title)
         val sub = if (artistFolder) Util.sanitize(artist.ifEmpty { "Artista sconosciuto" }) else null
+        if (format == "WAV") {
+            saveWav(id, data, ext, base, sub, title, artist, cover)
+            fprog(100, "Completato")
+            return true
+        }
         val mp3 = File(ctx.cacheDir, "$id.mp3")
         var skip = 0L
         try {
@@ -145,13 +151,39 @@ class Downloader(
             fprog(97, "Scrittura titolo e cover")
             val tag = Id3.build(title, artist, cover)
             val sizeMb = (mp3.length() - skip + tag.size) / 1024.0 / 1024.0
-            val path = withContext(Dispatchers.IO) { Saver.save(ctx, saveTree, base, sub, title, artist, tag, mp3, skip) }
+            val path = withContext(Dispatchers.IO) { Saver.save(ctx, saveTree, base, ".mp3", "audio/mpeg", sub, title, artist, tag, mp3, skip) }
             log("   ✔ Salvato: $path  (${"%.2f".format(sizeMb)} MB)")
         } finally {
             mp3.delete()
         }
         fprog(100, "Completato")
         return true
+    }
+
+    /** WAV PCM 16 bit: decodifica la sorgente (anche MP3) e scrive titolo, artista e cover nel file. */
+    private suspend fun saveWav(id: String, data: ByteArray, ext: String, base: String, sub: String?,
+                                title: String, artist: String, cover: ByteArray?) {
+        val tmp = File(ctx.cacheDir, "$id.src$ext")
+        val wav = File(ctx.cacheDir, "$id.wav")
+        try {
+            withContext(Dispatchers.IO) { tmp.writeBytes(data) }
+            log("   Conversione in WAV...")
+            fprog(70, "Conversione WAV")
+            withContext(Dispatchers.IO) {
+                Mp3Converter.toWav(tmp, wav, title, artist, Id3.build(title, artist, cover), ctl) { f ->
+                    fprog((70 + 27 * f).toInt(), "Conversione WAV")
+                }
+            }
+            fprog(97, "Salvataggio")
+            val sizeMb = wav.length() / 1024.0 / 1024.0
+            val path = withContext(Dispatchers.IO) {
+                Saver.save(ctx, saveTree, base, ".wav", "audio/x-wav", sub, title, artist, ByteArray(0), wav, 0)
+            }
+            log("   ✔ Salvato: $path  (${"%.1f".format(sizeMb)} MB)")
+        } finally {
+            tmp.delete()
+            wav.delete()
+        }
     }
 
     /** Fa partire la riproduzione e attende l'audio decifrato dal player. */

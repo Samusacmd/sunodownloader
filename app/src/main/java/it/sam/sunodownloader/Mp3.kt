@@ -174,15 +174,26 @@ object Mp3Converter {
         val info = MediaCodec.BufferInfo()
         var inEos = false
         var outEos = false
+        val total = src.length().coerceAtLeast(1)
+        var readBytes = 0L
+        var lastOut = android.os.SystemClock.elapsedRealtime()
         try {
             while (!outEos) {
+                if (ctl.paused) {   // il tempo in pausa non conta per il controllo "bloccata"
+                    ctl.checkBlocking()
+                    lastOut = android.os.SystemClock.elapsedRealtime()
+                }
                 ctl.checkBlocking()
+                // sicurezza: mai bloccata per sempre
+                if (android.os.SystemClock.elapsedRealtime() - lastOut > 20000)
+                    throw RuntimeException("Conversione bloccata: il decoder non produce audio da 20 s")
                 if (!inEos) {
                     val ii = codec.dequeueInputBuffer(10000)
                     if (ii >= 0) {
                         val buf = codec.getInputBuffer(ii)!!
                         val n = ex.readSampleData(buf, 0)
-                        if (n < 0) {
+                        if (n >= 0) readBytes += n
+                        if (n < 0 || readBytes > total * 3) {   // fine dati (o lettura che gira a vuoto)
                             codec.queueInputBuffer(ii, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inEos = true
                         } else {
@@ -225,7 +236,9 @@ object Mp3Converter {
                             }
                         }
                         sink.write(shorts, frames, rate, outCh)
-                        if (durUs > 0) onFrac((info.presentationTimeUs.toFloat() / durUs).coerceIn(0f, 1f))
+                        if (frames > 0) lastOut = android.os.SystemClock.elapsedRealtime()
+                        // avanzamento in base ai dati letti: non torna mai indietro
+                        onFrac((readBytes.toFloat() / total).coerceIn(0f, 1f))
                     }
                     codec.releaseOutputBuffer(oi, false)
                     if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outEos = true

@@ -153,10 +153,15 @@ class Downloader(
                     withContext(Dispatchers.IO) { tmp.writeBytes(data) }
                     log("   Conversione in MP3 $bitrate kbps...")
                     fprog(70, "Conversione MP3 $bitrate kbps")
-                    withContext(Dispatchers.IO) {
-                        Mp3Converter.convert(tmp, mp3, bitrate, ctl) { f ->
-                            fprog((70 + 27 * f).toInt(), "Conversione MP3 $bitrate kbps")
+                    try {
+                        withContext(Dispatchers.IO) {
+                            Mp3Converter.convert(tmp, mp3, bitrate, ctl) { f ->
+                                fprog((70 + 27 * f).toInt(), "Conversione MP3 $bitrate kbps")
+                            }
                         }
+                    } catch (e: Exception) {
+                        saveRaw(data, ext, base, sub, title, artist)
+                        throw e
                     }
                 } finally {
                     tmp.delete()
@@ -188,10 +193,15 @@ class Downloader(
             withContext(Dispatchers.IO) { tmp.writeBytes(data) }
             log("   Conversione in WAV...")
             fprog(70, "Conversione WAV")
-            withContext(Dispatchers.IO) {
-                Mp3Converter.toWav(tmp, wav, title, artist, Id3.build(title, artist, cover), ctl) { f ->
-                    fprog((70 + 27 * f).toInt(), "Conversione WAV")
+            try {
+                withContext(Dispatchers.IO) {
+                    Mp3Converter.toWav(tmp, wav, title, artist, Id3.build(title, artist, cover), ctl) { f ->
+                        fprog((70 + 27 * f).toInt(), "Conversione WAV")
+                    }
                 }
+            } catch (e: Exception) {
+                saveRaw(data, ext, base, sub, title, artist)
+                throw e
             }
             fprog(97, "Salvataggio")
             val sizeMb = wav.length() / 1024.0 / 1024.0
@@ -282,6 +292,7 @@ class Downloader(
                 // completo = il player ha in memoria fino alla fine; senza durata nota aspetto 6 s di stabilita'
                 if ((complete && stable >= 1) || (dur <= 0 && stable >= 4)) {
                     log("   Audio catturato (${best.s("kind")}, ${size / 1024} KB, player ${fmtSec(bufEnd)} su ${fmtSec(dur)})")
+                    log("   (diag: $stats  elementi=${st?.optInt("n")}  url=$urls)")
                     return readBest(size) to dur
                 }
             } else if (attempt < 6) {
@@ -302,6 +313,23 @@ class Downloader(
         }
         log("   (diagnostica: intercettazioni $stats, indirizzi audio visti $urls)")
         return null
+    }
+
+    /** Conversione fallita o fermata: salva l'audio catturato cosi' com'e', per poterlo analizzare. */
+    private suspend fun saveRaw(data: ByteArray, ext: String, base: String, sub: String?, title: String, artist: String) {
+        val raw = File(ctx.cacheDir, "raw$ext")
+        try {
+            val mime = when (ext) { ".m4a" -> "audio/mp4"; ".mp3" -> "audio/mpeg"; ".ogg" -> "audio/ogg"; ".wav" -> "audio/x-wav"; else -> "audio/webm" }
+            val path = withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                raw.writeBytes(data)
+                Saver.save(ctx, saveTree, "$base (grezzo)", ext, mime, sub, title, artist, ByteArray(0), raw, 0)
+            }
+            log("   💾 Audio grezzo salvato per l'analisi: $path")
+        } catch (e: Exception) {
+            log("   (grezzo non salvato: ${e.message})")
+        } finally {
+            raw.delete()
+        }
     }
 
     private fun parseDur(s: String): Double? {

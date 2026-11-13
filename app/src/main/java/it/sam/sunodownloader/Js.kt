@@ -12,7 +12,7 @@ object Js {
     const val HOOK = """
 (() => {
   if (window.__sc) return;
-  const C = window.__sc = {dec: [], blobs: [], mse: [], dai: [], clips: {}, order: [], media: [], urls: []};
+  const C = window.__sc = {dec: [], blobs: [], mse: [], sbs: [], dai: [], clips: {}, order: [], media: [], urls: []};
   const AUDIO_URL = /\.m3u8|\.mp3|\.m4a|\.aac|\.mp4|\.ts(\?|#|(?![\s\S]))|audio|stream/i;
   const noteUrl = (u) => { try { u = String(u || ''); if (u && AUDIO_URL.test(u) && C.urls.indexOf(u) < 0) C.urls.push(u); } catch (e) {} };
   const copy = (x) => {
@@ -41,14 +41,52 @@ object Js {
       return oc.apply(this, arguments);
     };
   } catch (e) {}
+  // --- MediaSource: un registro per ogni flusso (SourceBuffer), senza pezzi doppi
+  const sbRec = (sb, mime) => {
+    if (!sb.__sc) { sb.__sc = {mime: mime || '?', parts: [], keys: {}, dup: 0, offs: {}}; C.sbs.push(sb.__sc); }
+    return sb.__sc;
+  };
+  const keyOf = (b) => {
+    const u = new Uint8Array(b), n = u.length;
+    let k = n + ':';
+    for (const p of [0, n >> 2, n >> 1, (3 * n) >> 2, Math.max(0, n - 48)]) {
+      for (let i = p; i < Math.min(n, p + 48); i++) k += u[i].toString(16);
+      k += '|';
+    }
+    return k;
+  };
   try {
+    if (window.MediaSource) {
+      const oadd = MediaSource.prototype.addSourceBuffer;
+      MediaSource.prototype.addSourceBuffer = function (mime) {
+        const sb = oadd.apply(this, arguments);
+        try { sbRec(sb, mime); } catch (e) {}
+        return sb;
+      };
+    }
     if (window.SourceBuffer) {
       const oa = SourceBuffer.prototype.appendBuffer;
       SourceBuffer.prototype.appendBuffer = function (d) {
-        const b = copy(d); if (b) C.mse.push(b);
+        try {
+          const b = copy(d);
+          if (b) {
+            const r = sbRec(this);
+            const k = keyOf(b);
+            if (r.keys[k]) r.dup++; else { r.keys[k] = 1; r.parts.push(b); }
+            r.offs[String(this.timestampOffset)] = 1;
+          }
+        } catch (e) {}
         return oa.apply(this, arguments);
       };
     }
+  } catch (e) {}
+  // --- elementi audio a cui viene assegnata una sorgente (anche se non sono nella pagina)
+  try {
+    const ds = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+    if (ds && ds.set) Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+      configurable: true, enumerable: ds.enumerable, get: ds.get,
+      set: function (v) { try { if (C.media.indexOf(this) < 0) C.media.push(this); } catch (e) {} return ds.set.call(this, v); }
+    });
   } catch (e) {}
   try {
     const AC = window.BaseAudioContext || window.AudioContext;
@@ -169,13 +207,18 @@ object Js {
   };
   const cands = [];
   for (const k of ['dec', 'blobs', 'dai']) for (const b of C[k]) if (isAudio(b)) cands.push([k, b]);
-  if (C.mse.length && isAudio(C.mse[0])) {
-    const tot = C.mse.reduce((a, b) => a + b.byteLength, 0);
+  const box = (b) => { try { return String.fromCharCode.apply(null, new Uint8Array(b, 4, 4)); } catch (e) { return '?'; } };
+  const sbs = [];
+  for (const r of C.sbs) {
+    const tot = r.parts.reduce((a, b) => a + b.byteLength, 0);
+    sbs.push({mime: r.mime, n: r.parts.length, dup: r.dup, kb: Math.round(tot / 1024),
+              first: r.parts.length ? box(r.parts[0]) : '', offs: Object.keys(r.offs).length});
+    if (!r.parts.length || !isAudio(r.parts[0]) || /avc|hev|hvc|vp8|vp9|av01/i.test(r.mime)) continue;   // flussi video
     const out = new Uint8Array(tot); let o = 0;
-    for (const b of C.mse) { out.set(new Uint8Array(b), o); o += b.byteLength; }
-    cands.push(['mse', out.buffer]);
+    for (const b of r.parts) { out.set(new Uint8Array(b), o); o += b.byteLength; }
+    cands.push(['mse ' + r.mime, out.buffer]);
   }
-  const stats = {dec: C.dec.length, blobs: C.blobs.length, mse: C.mse.length, dai: C.dai.length};
+  const stats = {dec: C.dec.length, blobs: C.blobs.length, dai: C.dai.length, sbs: sbs};
   if (!cands.length) return JSON.stringify({stats: stats, best: null});
   cands.sort((a, b) => b[1].byteLength - a[1].byteLength);
   window.__scBest = new Uint8Array(cands[0][1]);
@@ -286,8 +329,10 @@ object Js {
   const list = Array.from(new Set([].concat(C.media || [], Array.from(document.querySelectorAll('audio,video')))));
   let m = null;
   for (const x of list) {
-    const d = isFinite(x.duration) ? x.duration : 0, md = m && isFinite(m.duration) ? m.duration : 0;
-    if (!m || d > md) m = x;
+    const s = x.currentSrc || x.src || '';
+    const d = isFinite(x.duration) ? x.duration : 0;
+    if (/\/sil-/i.test(s) || d < 5) continue;   // file di silenzio usato da Suno per "sbloccare" l'audio
+    if (!m || d > m.duration) m = x;
   }
   const out = {n: list.length, urls: (C.urls || []).slice(-8)};
   if (!m) return JSON.stringify(out);

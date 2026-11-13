@@ -4,8 +4,8 @@ plugins {
 }
 
 // Versione dell'app (Semantic Versioning): cambia SOLO qui.
-val appVersionName = "1.3.1"
-val appVersionCode = 9
+val appVersionName = "1.3.2"
+val appVersionCode = 10
 
 android {
     namespace = "it.sam.sunodownloader"

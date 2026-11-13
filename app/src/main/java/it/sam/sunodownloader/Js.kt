@@ -12,7 +12,9 @@ object Js {
     const val HOOK = """
 (() => {
   if (window.__sc) return;
-  const C = window.__sc = {dec: [], blobs: [], mse: [], dai: [], clips: {}, order: []};
+  const C = window.__sc = {dec: [], blobs: [], mse: [], dai: [], clips: {}, order: [], media: [], urls: []};
+  const AUDIO_URL = /\.m3u8|\.mp3|\.m4a|\.aac|\.mp4|\.ts(\?|#|(?![\s\S]))|audio|stream/i;
+  const noteUrl = (u) => { try { u = String(u || ''); if (u && AUDIO_URL.test(u) && C.urls.indexOf(u) < 0) C.urls.push(u); } catch (e) {} };
   const copy = (x) => {
     try {
       if (x instanceof ArrayBuffer) return x.slice(0);
@@ -63,6 +65,7 @@ object Js {
     const op = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function () {
       try { this.muted = true; this.volume = 0; } catch (e) {}
+      try { if (C.media.indexOf(this) < 0) C.media.push(this); } catch (e) {}
       return op.apply(this, arguments);
     };
   } catch (e) {}
@@ -120,6 +123,7 @@ object Js {
   try {
     const of = window.fetch;
     window.fetch = function () {
+      try { const a = arguments[0]; noteUrl(a && a.url ? a.url : a); } catch (e) {}
       return of.apply(this, arguments).then(r => {
         try {
           const ct = (r.headers && r.headers.get('content-type')) || '';
@@ -130,6 +134,8 @@ object Js {
     };
   } catch (e) {}
   try {
+    const oo = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u) { noteUrl(u); return oo.apply(this, arguments); };
     const os = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function () {
       this.addEventListener('load', function () {
@@ -272,6 +278,37 @@ object Js {
   return JSON.stringify(Object.values(out));
 })()
 """
+
+    private const val STATE = """
+(() => {
+  const C = window.__sc;
+  if (!C) return JSON.stringify({n: 0});
+  const list = Array.from(new Set([].concat(C.media || [], Array.from(document.querySelectorAll('audio,video')))));
+  let m = null;
+  for (const x of list) {
+    const d = isFinite(x.duration) ? x.duration : 0, md = m && isFinite(m.duration) ? m.duration : 0;
+    if (!m || d > md) m = x;
+  }
+  const out = {n: list.length, urls: (C.urls || []).slice(-8)};
+  if (!m) return JSON.stringify(out);
+  if (__BOOST__) {
+    // velocita' massima (muto): il player scarica tutto il brano invece di 30-40 s alla volta
+    try { m.muted = true; } catch (e) {}
+    for (const r of [16, 8, 4]) { try { if (m.playbackRate < r) m.playbackRate = r; break; } catch (e) {} }
+    if (m.paused && !m.ended) { try { const p = m.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+  }
+  let bufEnd = 0;
+  try { for (let i = 0; i < m.buffered.length; i++) bufEnd = Math.max(bufEnd, m.buffered.end(i)); } catch (e) {}
+  const src = m.currentSrc || m.src || '';
+  out.dur = isFinite(m.duration) ? m.duration : -1;
+  out.cur = m.currentTime; out.bufEnd = bufEnd; out.paused = m.paused; out.ended = m.ended; out.rate = m.playbackRate;
+  out.src = /^https?:/i.test(src) ? src : '';
+  return JSON.stringify(out);
+})()
+"""
+
+    /** Stato del player (durata, quanto e' gia' scaricato, sorgente); con boost lo manda a 16x. */
+    fun state(boost: Boolean): String = STATE.replace("__BOOST__", if (boost) "true" else "false")
 
     /** Brani raccolti finora dalle risposte JSON. */
     const val CLIPS = """

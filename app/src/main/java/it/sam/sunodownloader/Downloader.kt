@@ -72,7 +72,9 @@ class Downloader(
         var image = ""
         var audioUrl = ""
         val clip = withContext(Dispatchers.IO) { Net.clip(id) }
+        var expected = -1.0     // durata vera del brano (secondi), per scartare file incompleti
         if (clip != null) {
+            expected = clip.optJSONObject("metadata")?.optDouble("duration", -1.0) ?: -1.0
             title = clip.s("title")
             artist = clip.s("display_name")
             image = clip.s("image_large_url").ifEmpty { clip.s("image_url") }
@@ -96,16 +98,33 @@ class Downloader(
 
         ctl.check()
         fprog(25, "Cattura audio")
+        if (expected <= 0) expected = hint?.duration?.let { parseDur(it) } ?: -1.0
         var audio: ByteArray? = null
         for (u in listOf(audioUrl, hint?.audio ?: "").filter { it.isNotEmpty() }.distinct()) {
             val bytes = withContext(Dispatchers.IO) { Net.get(u, minSize = 20000) }
-            if (Util.isAudio(bytes)) { audio = bytes; break }
+            if (!Util.isAudio(bytes)) continue
+            val d = withContext(Dispatchers.IO) { durationSec(bytes!!) }
+            if (expected > 0 && d > 0 && d < expected - 3) {
+                log("   ⚠ File diretto incompleto (${fmtSec(d)} su ${fmtSec(expected)}): uso la cattura dal player")
+                continue
+            }
+            audio = bytes
+            break
         }
         if (audio == null) {
-            audio = capture(visible) { f -> fprog((25 + 35 * f).toInt(), "Cattura audio") }
+            val cap = capture(visible) { f -> fprog((25 + 35 * f).toInt(), "Cattura audio") }
+            if (cap != null) {
+                audio = cap.first
+                if (expected <= 0) expected = cap.second
+            }
         }
         val data: ByteArray = audio ?: return false
         if (!Util.isAudio(data)) throw RuntimeException("Dati catturati non riconosciuti come audio")
+        val got = withContext(Dispatchers.IO) { durationSec(data) }
+        if (expected > 0 && got > 0) {
+            if (got < expected - 3) log("   ⚠ AUDIO INCOMPLETO: ${fmtSec(got)} su ${fmtSec(expected)} (salvo comunque)")
+            else log("   Durata: ${fmtSec(got)} su ${fmtSec(expected)} ✔")
+        }
 
         val ext = Util.audioExt(data)
         ctl.check()
@@ -186,26 +205,85 @@ class Downloader(
         }
     }
 
-    /** Fa partire la riproduzione e attende l'audio decifrato dal player. */
-    private suspend fun capture(visible: Boolean, onFrac: (Float) -> Unit): ByteArray? {
-        val maxIter = ((if (visible) 90 else 30) / 1.5).toInt()   // a iterazioni: la pausa non consuma il timeout
+    /** Durata reale (secondi) di un file audio, letta con MediaExtractor; -1 se non si sa. */
+    private fun durationSec(data: ByteArray): Double {
+        val f = File(ctx.cacheDir, "probe" + Util.audioExt(data))
+        try {
+            f.writeBytes(data)
+            val ex = android.media.MediaExtractor()
+            try {
+                ex.setDataSource(f.absolutePath)
+                // non mi fido della durata scritta nell'intestazione (un file troncato puo' dichiarare
+                // quella intera): scorro i pacchetti audio presenti davvero e prendo l'ultimo istante
+                for (i in 0 until ex.trackCount) {
+                    val fm = ex.getTrackFormat(i)
+                    if (fm.getString(android.media.MediaFormat.KEY_MIME)?.startsWith("audio/") != true) continue
+                    ex.selectTrack(i)
+                    var last = -1L
+                    while (true) {
+                        val t = ex.sampleTime
+                        if (t < 0) break
+                        if (t > last) last = t
+                        if (!ex.advance()) break
+                    }
+                    return if (last > 0) last / 1e6 else -1.0
+                }
+            } finally {
+                ex.release()
+            }
+        } catch (e: Exception) {
+        } finally {
+            f.delete()
+        }
+        return -1.0
+    }
+
+    private fun fmtSec(s: Double): String = if (s <= 0) "?" else Util.fmtTime(s.toLong())
+
+    /** Fa partire la riproduzione (muta, a 16x) e attende che il player abbia TUTTO il brano.
+     *  Restituisce audio + durata dichiarata dal player. */
+    private suspend fun capture(visible: Boolean, onFrac: (Float) -> Unit): Pair<ByteArray, Double>? {
+        val maxIter = ((if (visible) 150 else 75) / 1.5).toInt()   // a iterazioni: la pausa non consuma il timeout
         var attempt = 0
         var asked = false
         var lastSize = -1
+        var stable = 0
         var stats: String? = null
+        var dur = -1.0
+        var bufEnd = 0.0
+        var urls = ""
+        val triedSrc = HashSet<String>()
         for (it in 0 until maxIter) {
             ctl.check()
-            onFrac(minOf(1f, it / 12f))
+            val st = b.evalJson(Js.state(boost = attempt > 0 || lastSize >= 0)) as? JSONObject
+            if (st != null) {
+                dur = st.optDouble("dur", -1.0)
+                bufEnd = st.optDouble("bufEnd", 0.0)
+                urls = st.optJSONArray("urls")?.toString() ?: ""
+                // il player usa un file normale: lo scarico intero direttamente
+                val src = st.s("src")
+                if (src.isNotEmpty() && !src.contains("/sil-") && triedSrc.add(src)) {
+                    val bytes = withContext(Dispatchers.IO) { Net.get(src, minSize = 100000) }
+                    if (Util.isAudio(bytes)) {
+                        log("   Audio preso dal player (file intero, ${bytes!!.size / 1024} KB)")
+                        return bytes to dur
+                    }
+                }
+            }
+            onFrac(if (dur > 0) (bufEnd / dur).toFloat().coerceIn(0f, 1f) else minOf(1f, it / 30f))
             val res = b.evalJson(Js.GRAB) as? JSONObject
             stats = res?.optJSONObject("stats")?.toString()
             val best = res?.optJSONObject("best")
             if (best != null) {
                 val size = best.optInt("size")
-                if (size == lastSize) {   // dimensione stabile: dati completi
-                    log("   Audio decifrato catturato (${best.s("kind")}, ${size / 1024} KB)")
-                    return readBest(size)
-                }
+                stable = if (size == lastSize) stable + 1 else 0
                 lastSize = size
+                val complete = dur > 0 && (bufEnd >= dur - 1.0 || st?.optBoolean("ended") == true)
+                // completo = il player ha in memoria fino alla fine; senza durata nota aspetto 6 s di stabilita'
+                if ((complete && stable >= 1) || (dur <= 0 && stable >= 4)) {
+                    log("   Audio catturato (${best.s("kind")}, ${size / 1024} KB, player ${fmtSec(bufEnd)} su ${fmtSec(dur)})")
+                    return readBest(size) to dur
+                }
             } else if (attempt < 6) {
                 b.eval(Js.play(attempt))
                 attempt++
@@ -215,8 +293,20 @@ class Downloader(
             }
             ctl.sleep(1500)
         }
-        log("   (diagnostica intercettazioni: $stats)")
+        // tempo scaduto: tengo quello che c'e', segnalandolo
+        val res = b.evalJson(Js.GRAB) as? JSONObject
+        val best = res?.optJSONObject("best")
+        if (best != null) {
+            log("   ⚠ Tempo scaduto: il player aveva solo ${fmtSec(bufEnd)} su ${fmtSec(dur)}")
+            return readBest(best.optInt("size")) to dur
+        }
+        log("   (diagnostica: intercettazioni $stats, indirizzi audio visti $urls)")
         return null
+    }
+
+    private fun parseDur(s: String): Double? {
+        val p = s.split(":").mapNotNull { it.trim().toIntOrNull() }
+        return when (p.size) { 2 -> p[0] * 60.0 + p[1]; 3 -> p[0] * 3600.0 + p[1] * 60 + p[2]; else -> null }
     }
 
     /** Copia l'audio catturato dalla pagina a pezzi da 768 KB. */
